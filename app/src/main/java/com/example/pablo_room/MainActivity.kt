@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
@@ -43,7 +44,7 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("CoroutineCreationDuringComposition")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(){
+fun MainScreen() {
 
     var name by remember {
         mutableStateOf("")
@@ -53,28 +54,34 @@ fun MainScreen(){
         mutableStateOf("")
     }
 
-    var UserList by remember {
+    var userList by remember {
         mutableStateOf<List<User>>(emptyList())
     }
 
+    var editMode by remember {
+        mutableStateOf(false)
+    }
+
+    var textBt by remember {
+        mutableStateOf("Cadastrar")
+    }
+
+    var idEdit by remember {
+        mutableStateOf(0)
+    }
+
     val context = LocalContext.current
-
     val dbConnection = AppDataBase.getDatabase(context)
-
     val userDAO = dbConnection.userDAO()
 
-    LaunchedEffect(Unit){
-
+    LaunchedEffect(Unit) {
         try {
-
-            UserList = userDAO.listUser()
-
-        } catch (e: Exception){
-
+            userList = userDAO.listUser()
+        } catch (e: Exception) {
             Toast.makeText(
                 context,
                 "Erro ao carregar usuários: ${e.message}",
-            Toast.LENGTH_LONG
+                Toast.LENGTH_LONG
             ).show()
         }
     }
@@ -88,62 +95,118 @@ fun MainScreen(){
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        TextField(value = name,
+        TextField(
+            value = name,
             onValueChange = { name = it },
             label = { Text(text = "Nome") },
-            modifier = Modifier.fillMaxWidth())
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        TextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text(text = "E-mail") },
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(10.dp))
 
         Button(onClick = {
+            if (name.isNotBlank() && email.isNotBlank()) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
 
+                        if (!editMode) {
+                            userDAO.saveUser(User(0, name, email))
+                        }else {
 
+                            userDAO.attUser(User(idEdit,name,email))
+                            editMode = false
+                            idEdit = 0
+                            textBt = "Cadastrar usuário"
 
-        },
-            modifier = Modifier.fillMaxWidth()) {
-            Text(text = "Cadastrar usuário")
+                        }
+
+                        delay(500)
+                        userList = userDAO.listUser()
+                        name = ""
+                        email = ""
+
+                    } catch (e: Exception) {
+                        Log.e("Erro BD", "Erro ao conectar ao DB: ${e.message}")
+                    }
+                }
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(text = textBt)
         }
 
-        LazyColumn(Modifier.fillMaxWidth()){
+        Spacer(modifier = Modifier.height(10.dp))
 
-            items(UserList){
+        LazyColumn(Modifier.fillMaxWidth()) {
 
-                userAtual ->
+            items(userList) {
+
+                    userAtual -> ItemLayout(user = userAtual)
 
                 Column {
 
                     Text("Nome: ${userAtual.name}", fontSize = 20.sp)
                     Text("E-mail: ${userAtual.email}")
+                }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                Row {
 
-                    Button(onClick = { }) {
+                    Button(onClick = {
 
-                        if (name.isNotBlank() && email.isNotBlank()){
+                        name = userAtual.name
+                        email = userAtual.email
+                        idEdit = userAtual.id
+                        editMode = true
+                        textBt = "Edit User"
+
+
+
+                    }) {
+                        Text(text = "Edit")
+                    }
+
+
+                    Button(onClick = {
+
+                        try {
 
                             CoroutineScope(Dispatchers.IO).launch {
 
-                                try {
-
-                                    userDAO.saveUser(User(0, name, email))
-
-                                    UserList = userDAO.listUser()
-
-                                    name = ""
-                                    email = ""
-
-                                } catch (e: Exception){
-
-                                    Log.e("Erro BD", "Erro ao conectar ao DB: ${e.message}")
-                                }
+                                userDAO.deleteUser(userAtual)
+                                delay(500)
+                                userList = userDAO.listUser()
                             }
+
                         }
+
+                        catch (e: Exception){
+                            Log.e("Erro DB", "${e.message}")
+                        }
+
+                    }) {
+                        Text(text = "Delet")
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+fun ItemLayout(user: User) {
+
+}
+
+
+
 
 
 
